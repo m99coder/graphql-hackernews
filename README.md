@@ -2,13 +2,12 @@
 
 > How to GraphQL – Hackernews Clone
 
-## Server
-
-Change into the root directory `/server`.
+## Introduction
 
 This tutorial is a step-by-step guide and each step can be checked out individually. To get a full list of available tags run `git tag`. To checkout a specific tag run `git checkout tags/<tag>`.
 
 - [graphql-hackernews](#graphql-hackernews)
+  - [Introduction](#introduction)
   - [Server](#server)
     - [Getting started](#getting-started)
     - [A simple query](#a-simple-query)
@@ -20,6 +19,10 @@ This tutorial is a step-by-step guide and each step can be checked out individua
     - [Extend context by authorization](#extend-context-by-authorization)
     - [Adding a voting feature](#adding-a-voting-feature)
     - [Separate all remaining resolvers](#separate-all-remaining-resolvers)
+
+## Server
+
+Change into the root directory `/server`.
 
 ### Getting started
 
