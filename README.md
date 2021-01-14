@@ -27,3 +27,72 @@ The result looks like this:
   }
 }
 ```
+
+### A simple query
+
+```diff
+diff --git a/server/src/index.js b/server/src/index.js
+index 3788ed7..593f5d1 100644
+--- a/server/src/index.js
++++ b/server/src/index.js
+@@ -3,12 +3,31 @@ const { ApolloServer } = require("apollo-server")
+ const typeDefs = `
+   type Query {
+     info: String!
++    feed: [Link!]!
++  }
++
++  type Link {
++    id: ID!
++    description: String!
++    url: String!
+   }
+ `
+
++let links = [{
++  id: "link-0",
++  url: "https://howtographql.com",
++  description: "Fullstack tutorial for GraphQL"
++}]
++
+ const resolvers = {
+   Query: {
+     info: () => `This is the API of a Hackernews Clone`,
++    feed: () => links,
++  },
++  Link: {
++    id: (parent) => parent.id,
++    description: (parent) => parent.description,
++    url: (parent) => parent.url,
+   },
+ }
+
+```
+
+Run the following query
+
+```graphql
+query {
+  feed {
+    id
+    url
+    description
+  }
+}
+```
+
+You should retrieve this result
+
+```json
+{
+  "data": {
+    "feed": [
+      {
+        "id": "link-0",
+        "url": "https://howtographql.com",
+        "description": "Fullstack tutorial for GraphQL"
+      }
+    ]
+  }
+}
+```
