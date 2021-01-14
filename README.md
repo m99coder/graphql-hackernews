@@ -20,6 +20,7 @@ This tutorial is a step-by-step guide and each step can be checked out individua
     - [Adding a voting feature](#adding-a-voting-feature)
     - [Separate all remaining resolvers](#separate-all-remaining-resolvers)
     - [Filtering](#filtering)
+    - [Pagination](#pagination)
 
 ## Server
 
@@ -1166,6 +1167,55 @@ query {
       id
       name
     }
+  }
+}
+```
+
+### Pagination
+
+First modify the query definition for `feed`
+
+```diff
+diff --git a/server/src/schema.graphql b/server/src/schema.graphql
+index 0920c9e..718fac5 100644
+--- a/server/src/schema.graphql
++++ b/server/src/schema.graphql
+@@ -1,6 +1,6 @@
+ type Query {
+   info: String!
+-  feed(filter: String): [Link!]!
++  feed(filter: String, skip: Int, take: Int): [Link!]!
+ }
+
+ type Mutation {
+```
+
+Then incorporate the filter into the resolver function
+
+```diff
+diff --git a/server/src/resolvers/Query.js b/server/src/resolvers/Query.js
+index 31cba7a..d64a5f6 100644
+--- a/server/src/resolvers/Query.js
++++ b/server/src/resolvers/Query.js
+@@ -9,6 +9,8 @@ async function feed(parent, args, context, info) {
+
+   const links = await context.prisma.link.findMany({
+     where,
++    skip: args.skip,
++    take: args.take,
+   })
+
+   return links
+```
+
+Now you can query using the filter
+
+```graphql
+query {
+  feed(take: 1, skip: 1) {
+    id
+    description
+    url
   }
 }
 ```
