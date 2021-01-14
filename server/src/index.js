@@ -1,8 +1,11 @@
 const fs = require("fs")
 const path = require("path")
 
-const { ApolloServer } = require("apollo-server")
+const { ApolloServer, PubSub } = require("apollo-server")
 const { PrismaClient } = require("@prisma/client")
+
+const Mutation = require('./resolvers/Mutation')
+const Subscription = require('./resolvers/Subscription')
 
 const resolvers = {
   Query: {
@@ -11,17 +14,8 @@ const resolvers = {
       return context.prisma.link.findMany()
     },
   },
-  Mutation: {
-    post: (parent, args, context, info) => {
-      const newLink = context.prisma.link.create({
-        data: {
-          url: args.url,
-          description: args.description,
-        },
-      })
-      return newLink
-    },
-  },
+  Mutation,
+  Subscription,
   Link: {
     id: (parent) => parent.id,
     description: (parent) => parent.description,
@@ -30,12 +24,17 @@ const resolvers = {
 }
 
 const prisma = new PrismaClient()
+const pubsub = new PubSub()
 
 const server = new ApolloServer({
   typeDefs: fs.readFileSync(path.join(__dirname, "schema.graphql"), "utf-8"),
   resolvers,
-  context: {
-    prisma,
+  context: ({ req }) => {
+    return {
+      ...req,
+      prisma,
+      pubsub,
+    }
   },
 })
 

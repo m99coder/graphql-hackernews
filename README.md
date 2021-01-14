@@ -340,3 +340,148 @@ index bc31e08..f3125bf 100644
 ```
 
 You can try it in the GraphQL Playground and all added links remain even after a server restart.
+
+### Realtime subscriptions
+
+Add `PubSub` to the server
+
+```diff
+diff --git a/server/src/index.js b/server/src/index.js
+index f3125bf..9ded9ca 100644
+--- a/server/src/index.js
++++ b/server/src/index.js
+@@ -1,7 +1,7 @@
+ const fs = require("fs")
+ const path = require("path")
+
+-const { ApolloServer } = require("apollo-server")
++const { ApolloServer, PubSub } = require("apollo-server")
+ const { PrismaClient } = require("@prisma/client")
+
+ const resolvers = {
+@@ -30,12 +30,17 @@ const resolvers = {
+ }
+
+ const prisma = new PrismaClient()
++const pubsub = new PubSub()
+
+ const server = new ApolloServer({
+   typeDefs: fs.readFileSync(path.join(__dirname, "schema.graphql"), "utf-8"),
+   resolvers,
+-  context: {
+-    prisma,
++  context: ({ req }) => {
++    return {
++      ...req,
++      prisma,
++      pubsub,
++    }
+   },
+ })
+```
+
+Modify the GraphQL schema and add the `Subscription` type
+
+```graphql
+type Subscription {
+  newLink: Link
+}
+```
+
+Create a resolver for the subscription as `./src/resolvers/Subscription.js`
+
+```js
+function newLinkSubscribe(parent, args, context, info) {
+  return context.pubsub.asyncIterator("NEW_LINK")
+}
+
+const newLink = {
+  subscribe: newLinkSubscribe,
+  resolve: payload => {
+    return payload
+  },
+}
+
+module.exports = {
+  newLink,
+}
+```
+
+Outsource the resolver for the mutation as well as `./src/resolvers/Mutation.js`
+
+```js
+async function post(parent, args, context, info) {
+  const newLink = await context.prisma.link.create({
+    data: {
+      url: args.url,
+      description: args.description
+    },
+  })
+  context.pubsub.publish("NEW_LINK", newLink)
+
+  return newLink
+}
+
+module.exports = {
+  post,
+}
+```
+
+Modify the server code
+
+```diff
+diff --git a/server/src/index.js b/server/src/index.js
+index 9ded9ca..168b970 100644
+--- a/server/src/index.js
++++ b/server/src/index.js
+@@ -4,6 +4,9 @@ const path = require("path")
+ const { ApolloServer, PubSub } = require("apollo-server")
+ const { PrismaClient } = require("@prisma/client")
+
++const Mutation = require('./resolvers/Mutation')
++const Subscription = require('./resolvers/Subscription')
++
+ const resolvers = {
+   Query: {
+     info: () => `This is the API of a Hackernews Clone`,
+@@ -11,17 +14,8 @@ const resolvers = {
+       return context.prisma.link.findMany()
+     },
+   },
+-  Mutation: {
+-    post: (parent, args, context, info) => {
+-      const newLink = context.prisma.link.create({
+-        data: {
+-          url: args.url,
+-          description: args.description,
+-        },
+-      })
+-      return newLink
+-    },
+-  },
++  Mutation,
++  Subscription,
+   Link: {
+     id: (parent) => parent.id,
+     description: (parent) => parent.description,
+```
+
+You can test the subscription by using the following queries in different tabs of the GraphQL playground
+
+```graphql
+subscription onNewLink {
+  newLink {
+    id
+    url
+    description
+  }
+}
+```
+
+```graphql
+mutation newLink {
+  post(url: "https://graphqlweekly.com", description: "Curated GraphQL content coming to your email inbox every Friday") {
+    id
+  }
+}
+```
