@@ -608,7 +608,7 @@ To sign up and login use the following mutations
 
 ```graphql
 mutation signMeUp {
-  signup(email: "m99@posteo.de", password: "password", name: "Marco") {
+  signup(email: "mail@example.com", password: "password", name: "Marco") {
     token
     user {
       id
@@ -619,7 +619,7 @@ mutation signMeUp {
 }
 
 mutation logMeIn {
-  login(email: "m99@posteo.de", password: "password") {
+  login(email: "mail@example.com", password: "password") {
     token
     user {
       id
