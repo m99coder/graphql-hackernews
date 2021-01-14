@@ -22,6 +22,7 @@ This tutorial is a step-by-step guide and each step can be checked out individua
     - [Filtering](#filtering)
     - [Pagination](#pagination)
     - [Sorting](#sorting)
+    - [Counting](#counting)
 
 ## Server
 
@@ -1281,6 +1282,75 @@ query {
     description
     url
     createdAt
+  }
+}
+```
+
+### Counting
+
+First modify the query definition for `feed` and add a sub-type
+
+```diff
+diff --git a/server/src/schema.graphql b/server/src/schema.graphql
+index 43cdb63..0fed02b 100644
+--- a/server/src/schema.graphql
++++ b/server/src/schema.graphql
+@@ -1,6 +1,6 @@
+ type Query {
+   info: String!
+-  feed(filter: String, skip: Int, take: Int, orderBy: LinkOrderByInput): [Link!]!
++  feed(filter: String, skip: Int, take: Int, orderBy: LinkOrderByInput): Feed!
+ }
+
+ type Mutation {
+@@ -38,6 +38,11 @@ type Vote {
+   user: User!
+ }
+
++type Feed {
++  links: [Link!]!
++  count: Int!
++}
++
+ type AuthPayload {
+   token: String
+   user: User
+```
+
+Then incorporate the counting into the resolver function
+
+```diff
+diff --git a/server/src/resolvers/Query.js b/server/src/resolvers/Query.js
+index 33caf53..81c450f 100644
+--- a/server/src/resolvers/Query.js
++++ b/server/src/resolvers/Query.js
+@@ -14,7 +14,12 @@ async function feed(parent, args, context, info) {
+     orderBy: args.orderBy,
+   })
+
+-  return links
++  const count = await context.prisma.link.count({ where })
++
++  return {
++    links,
++    count,
++  }
+ }
+
+ module.exports = {
+```
+
+Now you can query and get back the actual count
+
+```graphql
+query {
+  feed {
+    count
+    links {
+      id
+      description
+      url
+    }
   }
 }
 ```
