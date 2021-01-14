@@ -17,15 +17,20 @@ type Link {
   id: ID!
   description: String!
   url: String!
+  postedBy: User
+  createdAt: DateTime!
 }
 
 type User {
   id: ID!
   name: String!
   email: String!
+  links: [Link!]!
 }
 
 type AuthPayload {
   token: String
   user: User
 }
+
+scalar DateTime

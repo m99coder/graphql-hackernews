@@ -629,3 +629,149 @@ mutation logMeIn {
   }
 }
 ```
+
+### Extend context by authentication
+
+Add the current user ID into the context if the respective authorization header holding a JWT is correct
+
+```diff
+diff --git a/server/src/index.js b/server/src/index.js
+index 168b970..4278f33 100644
+--- a/server/src/index.js
++++ b/server/src/index.js
+@@ -1,5 +1,6 @@
+ const fs = require("fs")
+ const path = require("path")
++const jwt = require("jsonwebtoken")
+
+ const { ApolloServer, PubSub } = require("apollo-server")
+ const { PrismaClient } = require("@prisma/client")
+@@ -26,6 +27,24 @@ const resolvers = {
+ const prisma = new PrismaClient()
+ const pubsub = new PubSub()
+
++const APP_SECRET = "GraphQL-is-aw3some"
++
++const getUserId = (req) => {
++  if (req) {
++    const authHeader = req.headers.authorization
++    if (authHeader) {
++      const token = authHeader.replace("Bearer ", "")
++      if (!token) {
++        throw new Error("No token found")
++      }
++      const { userId } = jwt.verify(token, APP_SECRET)
++      return userId
++    }
++  }
++
++  throw new Error("Not authenticated")
++}
++
+ const server = new ApolloServer({
+   typeDefs: fs.readFileSync(path.join(__dirname, "schema.graphql"), "utf-8"),
+   resolvers,
+@@ -34,6 +53,10 @@ const server = new ApolloServer({
+       ...req,
+       prisma,
+       pubsub,
++      userId:
++        req && req.headers.authorization
++          ? getUserId(req)
++          : null
+     }
+   },
+ })
+```
+
+Use this user ID to populate the soon to be added `postedBy` field
+
+```diff
+diff --git a/server/src/resolvers/Mutation.js b/server/src/resolvers/Mutation.js
+index 0218aad..10fb12e 100644
+--- a/server/src/resolvers/Mutation.js
++++ b/server/src/resolvers/Mutation.js
+@@ -4,10 +4,12 @@ const jwt = require("jsonwebtoken")
+ const APP_SECRET = "GraphQL-is-aw3some"
+
+ async function post(parent, args, context, info) {
++  const { userId } = context
+   const newLink = await context.prisma.link.create({
+     data: {
+       url: args.url,
+-      description: args.description
++      description: args.description,
++      postedBy: { connect: { id: userId } }
+     },
+   })
+   context.pubsub.publish("NEW_LINK", newLink)
+```
+
+Extend the GraphQL type definitions
+
+```diff
+diff --git a/server/src/schema.graphql b/server/src/schema.graphql
+index 83c7984..4fb3627 100644
+--- a/server/src/schema.graphql
++++ b/server/src/schema.graphql
+@@ -17,15 +17,20 @@ type Link {
+   id: ID!
+   description: String!
+   url: String!
++  postedBy: User
++  createdAt: DateTime!
+ }
+
+ type User {
+   id: ID!
+   name: String!
+   email: String!
++  links: [Link!]!
+ }
+
+ type AuthPayload {
+   token: String
+   user: User
+ }
++
++scalar DateTime
+```
+
+Extend the Prisma schema as well
+
+```diff
+diff --git a/server/prisma/schema.prisma b/server/prisma/schema.prisma
+index ee7a53b..dfee2fe 100644
+--- a/server/prisma/schema.prisma
++++ b/server/prisma/schema.prisma
+@@ -12,6 +12,8 @@ model Link {
+   createdAt   DateTime @default(now())
+   description String
+   url         String
++  postedBy    User     @relation(fields: [postedById], references: [id])
++  postedById  Int
+ }
+
+ model User {
+@@ -19,4 +21,5 @@ model User {
+   name     String
+   email    String @unique
+   password String
++  links    Link[]
+ }
+```
+
+Migrate database schema
+
+```bash
+npx prisma migrate save --name "add-user-relation" --experimental
+npx prisma migrate up --experimental
+```
+
+Apply the changes and update Prisma Client API
+
+```bash
+npx prisma generate
+```
+
+To test the whole cycle you first need to sign up or – if already done – login. Copy the token you receive and set a respective `Authorization` header for creating a new link.

@@ -4,10 +4,12 @@ const jwt = require("jsonwebtoken")
 const APP_SECRET = "GraphQL-is-aw3some"
 
 async function post(parent, args, context, info) {
+  const { userId } = context
   const newLink = await context.prisma.link.create({
     data: {
       url: args.url,
-      description: args.description
+      description: args.description,
+      postedBy: { connect: { id: userId } }
     },
   })
   context.pubsub.publish("NEW_LINK", newLink)
