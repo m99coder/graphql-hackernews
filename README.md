@@ -6,6 +6,21 @@
 
 Change into the root directory `/server`.
 
+This tutorial is a step-by-step guide and each step can be checked out individually. To get a full list of available tags run `git tag`. To checkout a specific tag run `git checkout tags/<tag>`.
+
+- [graphql-hackernews](#graphql-hackernews)
+  - [Server](#server)
+    - [Getting started](#getting-started)
+    - [A simple query](#a-simple-query)
+    - [A simple mutation](#a-simple-mutation)
+    - [Adding a database](#adding-a-database)
+    - [Connect server and database](#connect-server-and-database)
+    - [Realtime subscriptions](#realtime-subscriptions)
+    - [Authentication](#authentication)
+    - [Extend context by authorization](#extend-context-by-authorization)
+    - [Adding a voting feature](#adding-a-voting-feature)
+    - [Separate all remaining resolvers](#separate-all-remaining-resolvers)
+
 ### Getting started
 
 Type definitions and resolvers are just statically declared in this step. Run `npm start` and go to [http://localhost:4000](http://localhost:4000) to run the GraphQL Playground. For convenience a second command is available: `npm run dev` restarts the same server whenever `./src/index.js` is modified.
@@ -630,7 +645,7 @@ mutation logMeIn {
 }
 ```
 
-### Extend context by authentication
+### Extend context by authorization
 
 Add the current user ID into the context if the respective authorization header holding a JWT is correct
 
