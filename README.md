@@ -21,6 +21,7 @@ This tutorial is a step-by-step guide and each step can be checked out individua
     - [Separate all remaining resolvers](#separate-all-remaining-resolvers)
     - [Filtering](#filtering)
     - [Pagination](#pagination)
+    - [Sorting](#sorting)
 
 ## Server
 
@@ -1190,7 +1191,7 @@ index 0920c9e..718fac5 100644
  type Mutation {
 ```
 
-Then incorporate the filter into the resolver function
+Then incorporate the pagination into the resolver function
 
 ```diff
 diff --git a/server/src/resolvers/Query.js b/server/src/resolvers/Query.js
@@ -1208,7 +1209,7 @@ index 31cba7a..d64a5f6 100644
    return links
 ```
 
-Now you can query using the filter
+Now you can query using the pagination
 
 ```graphql
 query {
@@ -1216,6 +1217,70 @@ query {
     id
     description
     url
+  }
+}
+```
+
+### Sorting
+
+First modify the query definition for `feed` and add sort criteria rules
+
+```diff
+diff --git a/server/src/schema.graphql b/server/src/schema.graphql
+index 718fac5..43cdb63 100644
+--- a/server/src/schema.graphql
++++ b/server/src/schema.graphql
+@@ -1,6 +1,6 @@
+ type Query {
+   info: String!
+-  feed(filter: String, skip: Int, take: Int): [Link!]!
++  feed(filter: String, skip: Int, take: Int, orderBy: LinkOrderByInput): [Link!]!
+ }
+
+ type Mutation {
+@@ -44,3 +44,14 @@ type AuthPayload {
+ }
+
+ scalar DateTime
++
++input LinkOrderByInput {
++  description: Sort
++  url: Sort
++  createdAt: Sort
++}
++
++enum Sort {
++  asc
++  desc
++}
+```
+
+Then incorporate the sorting into the resolver function
+
+```diff
+diff --git a/server/src/resolvers/Query.js b/server/src/resolvers/Query.js
+index d64a5f6..33caf53 100644
+--- a/server/src/resolvers/Query.js
++++ b/server/src/resolvers/Query.js
+@@ -11,6 +11,7 @@ async function feed(parent, args, context, info) {
+     where,
+     skip: args.skip,
+     take: args.take,
++    orderBy: args.orderBy,
+   })
+
+   return links
+```
+
+Now you can query using the sorting
+
+```graphql
+query {
+  feed(orderBy: { createdAt: asc }) {
+    id
+    description
+    url
+    createdAt
   }
 }
 ```
