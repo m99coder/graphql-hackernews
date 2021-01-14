@@ -485,3 +485,147 @@ mutation newLink {
   }
 }
 ```
+
+### Authentication
+
+Install `bcrypt` and `jsonwebtoken`
+
+```bash
+npm i bcryptjs@^2.4 jsonwebtoken@^8.5 --save
+```
+
+Enhance GraphQL schema in `./src/schema.graphql`
+
+```graphql
+diff --git a/server/src/schema.graphql b/server/src/schema.graphql
+index a72a082..83c7984 100644
+--- a/server/src/schema.graphql
++++ b/server/src/schema.graphql
+@@ -5,6 +5,8 @@ type Query {
+
+ type Mutation {
+   post(url: String!, description: String!): Link!
++  signup(email: String!, password: String!, name: String!): AuthPayload
++  login(email: String!, password: String!): AuthPayload
+ }
+
+ type Subscription {
+@@ -16,3 +18,14 @@ type Link {
+   description: String!
+   url: String!
+ }
++
++type User {
++  id: ID!
++  name: String!
++  email: String!
++}
++
++type AuthPayload {
++  token: String
++  user: User
++}
+```
+
+Enhance Prisma schema in `./prisma/schema.prisma`
+
+```prisma
+model User {
+  id       Int    @id @default(autoincrement())
+  name     String
+  email    String @unique
+  password String
+}
+```
+
+Migrate database schema
+
+```bash
+npx prisma migrate save --name "add-user-model" --experimental
+npx prisma migrate up --experimental
+```
+
+Apply the changes and update Prisma Client API
+
+```bash
+npx prisma generate
+```
+
+Signup and login mutations
+
+```diff
+diff --git a/server/src/resolvers/Mutation.js b/server/src/resolvers/Mutation.js
+index 5337e0b..0218aad 100644
+--- a/server/src/resolvers/Mutation.js
++++ b/server/src/resolvers/Mutation.js
+@@ -1,3 +1,8 @@
++const bcrypt = require("bcryptjs")
++const jwt = require("jsonwebtoken")
++
++const APP_SECRET = "GraphQL-is-aw3some"
++
+ async function post(parent, args, context, info) {
+   const newLink = await context.prisma.link.create({
+     data: {
+@@ -10,6 +15,34 @@ async function post(parent, args, context, info) {
+   return newLink
+ }
+
++async function signup(parent, args, context, info) {
++  const password = await bcrypt.hash(args.password, 10)
++  const user = await context.prisma.user.create({
++    data: { ...args, password }
++  })
++  const token = jwt.sign({ userId: user.id }, APP_SECRET)
++  return { token, user }
++}
++
++async function login(parent, args, context, info) {
++  const user = await context.prisma.user.findUnique({
++    where: { email: args.email }
++  })
++  if (!user) {
++    throw new Error("No such user found")
++  }
++
++  const valid = await bcrypt.compare(args.password, user.password)
++  if (!valid) {
++    throw new Error("Invalid password")
++  }
++
++  const token = jwt.sign({ userId: user.id }, APP_SECRET)
++  return { token, user }
++}
++
+ module.exports = {
+   post,
++  signup,
++  login,
+ }
+```
+
+To sign up and login use the following mutations
+
+```graphql
+mutation signMeUp {
+  signup(email: "m99@posteo.de", password: "password", name: "Marco") {
+    token
+    user {
+      id
+      name
+      email
+    }
+  }
+}
+
+mutation logMeIn {
+  login(email: "m99@posteo.de", password: "password") {
+    token
+    user {
+      id
+      name
+      email
+    }
+  }
+}
+```
