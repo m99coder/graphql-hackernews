@@ -997,3 +997,91 @@ index 7150405..a95a612 100644
 +  newVote,
  }
 ```
+
+### Separate all remaining resolvers
+
+`./src/resolvers/Link.js`
+
+```js
+function postedBy(parent, args, context) {
+  return context.prisma.link
+    .findUnique({ where: { id: parent.id } })
+    .postedBy()
+}
+
+function votes(parent, args, context) {
+  return context.prisma.link
+    .findUnique({ where: { id: parent.id } })
+    .votes()
+}
+
+module.exports = {
+  postedBy,
+  votes,
+}
+```
+
+`./src/resolvers/Query.js`
+
+```js
+async function feed(parent, args, context, info) {
+  return context.prisma.link.findMany()
+}
+
+module.exports = {
+  feed,
+}
+```
+
+`./src/resolvers/User.js`
+
+```js
+function links(parent, args, context) {
+  return context.prisma.user
+    .findUnique({ where: { id: parent.id } })
+    .links()
+}
+
+module.exports = {
+  links,
+}
+```
+
+Finally, modify the server code
+
+```diff
+diff --git a/server/src/index.js b/server/src/index.js
+index 8996e41..33d81eb 100644
+--- a/server/src/index.js
++++ b/server/src/index.js
+@@ -4,26 +4,19 @@ const path = require("path")
+ const { ApolloServer, PubSub } = require("apollo-server")
+ const { PrismaClient } = require("@prisma/client")
+
++const Link = require('./resolvers/Link')
+ const Mutation = require('./resolvers/Mutation')
++const Query = require('./resolvers/Query')
+ const Subscription = require('./resolvers/Subscription')
+ const Vote = require('./resolvers/Vote')
+
+ const { getUserId } = require('./utils')
+
+ const resolvers = {
+-  Query: {
+-    info: () => `This is the API of a Hackernews Clone`,
+-    feed: async (parent, args, context) => {
+-      return context.prisma.link.findMany()
+-    },
+-  },
++  Query,
+   Mutation,
+   Subscription,
+-  Link: {
+-    id: (parent) => parent.id,
+-    description: (parent) => parent.description,
+-    url: (parent) => parent.url,
+-  },
++  Link,
+   Vote,
+ }
+```

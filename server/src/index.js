@@ -4,26 +4,19 @@ const path = require("path")
 const { ApolloServer, PubSub } = require("apollo-server")
 const { PrismaClient } = require("@prisma/client")
 
+const Link = require('./resolvers/Link')
 const Mutation = require('./resolvers/Mutation')
+const Query = require('./resolvers/Query')
 const Subscription = require('./resolvers/Subscription')
 const Vote = require('./resolvers/Vote')
 
 const { getUserId } = require('./utils')
 
 const resolvers = {
-  Query: {
-    info: () => `This is the API of a Hackernews Clone`,
-    feed: async (parent, args, context) => {
-      return context.prisma.link.findMany()
-    },
-  },
+  Query,
   Mutation,
   Subscription,
-  Link: {
-    id: (parent) => parent.id,
-    description: (parent) => parent.description,
-    url: (parent) => parent.url,
-  },
+  Link,
   Vote,
 }
 
