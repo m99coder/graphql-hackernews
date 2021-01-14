@@ -19,6 +19,7 @@ This tutorial is a step-by-step guide and each step can be checked out individua
     - [Extend context by authorization](#extend-context-by-authorization)
     - [Adding a voting feature](#adding-a-voting-feature)
     - [Separate all remaining resolvers](#separate-all-remaining-resolvers)
+    - [Filtering](#filtering)
 
 ## Server
 
@@ -1104,4 +1105,67 @@ index 8996e41..33d81eb 100644
    Vote,
 +  User,
  }
+```
+
+### Filtering
+
+First modify the query definition for `feed`
+
+```diff
+diff --git a/server/src/schema.graphql b/server/src/schema.graphql
+index 95590a2..0920c9e 100644
+--- a/server/src/schema.graphql
++++ b/server/src/schema.graphql
+@@ -1,6 +1,6 @@
+ type Query {
+   info: String!
+-  feed: [Link!]!
++  feed(filter: String): [Link!]!
+ }
+
+ type Mutation {
+```
+
+Then incorporate the filter into the resolver function
+
+```diff
+diff --git a/server/src/resolvers/Query.js b/server/src/resolvers/Query.js
+index 3ce3250..31cba7a 100644
+--- a/server/src/resolvers/Query.js
++++ b/server/src/resolvers/Query.js
+@@ -1,5 +1,17 @@
+ async function feed(parent, args, context, info) {
+-  return context.prisma.link.findMany()
++  const where = args.filter
++    ? {
++      OR: [
++        { description: { contains: args.filter } },
++        { url: { contains: args.filter } },
++      ],
++    } : {}
++
++  const links = await context.prisma.link.findMany({
++    where,
++  })
++
++  return links
+ }
+
+ module.exports = {
+```
+
+Now you can query using the filter
+
+```graphql
+query {
+  feed(filter: "QL") {
+    id
+    description
+    url
+    postedBy {
+      id
+      name
+    }
+  }
+}
 ```
