@@ -775,3 +775,225 @@ npx prisma generate
 ```
 
 To test the whole cycle you first need to sign up or – if already done – login. Copy the token you receive and set a respective `Authorization` header for creating a new link.
+
+### Adding a voting feature
+
+Extend the prisma schema
+
+```diff
+diff --git a/server/prisma/schema.prisma b/server/prisma/schema.prisma
+index dfee2fe..d1ed15f 100644
+--- a/server/prisma/schema.prisma
++++ b/server/prisma/schema.prisma
+@@ -14,6 +14,7 @@ model Link {
+   url         String
+   postedBy    User     @relation(fields: [postedById], references: [id])
+   postedById  Int
++  votes       Vote[]
+ }
+
+ model User {
+@@ -22,4 +23,14 @@ model User {
+   email    String @unique
+   password String
+   links    Link[]
++  votes    Vote[]
++}
++
++model Vote {
++  id     Int  @id @default(autoincrement())
++  link   Link @relation(fields: [linkId], references: [id])
++  linkId Int
++  user   User @relation(fields: [userId], references: [id])
++  userId Int
++  @@unique([linkId, userId])
+ }
+```
+
+Migrate database schema
+
+```bash
+npx prisma migrate save --name "add-vote-model" --experimental
+npx prisma migrate up --experimental
+```
+
+Apply the changes and update Prisma Client API
+
+```bash
+npx prisma generate
+```
+
+Separate utility methods for convenience in `./src/utils.js`
+
+```js
+const jwt = require("jsonwebtoken")
+const APP_SECRET = "GraphQL-is-aw3some"
+
+const getUserId = (req) => {
+  if (req) {
+    const authHeader = req.headers.authorization
+    if (authHeader) {
+      const token = authHeader.replace("Bearer ", "")
+      if (!token) {
+        throw new Error("No token found")
+      }
+      const { userId } = jwt.verify(token, APP_SECRET)
+      return userId
+    }
+  }
+
+  throw new Error("Not authenticated")
+}
+
+module.exports = {
+  getUserId,
+}
+```
+
+Create a separate resolver for the newly added type `Vote` as `./src/resolvers/Vote.js`
+
+```js
+function link(parent, args, context) {
+  return context.prisma.vote
+    .findUnique({ where: { id: parent.id } })
+    .link()
+}
+
+function user(parent, args, context) {
+  return context.prisma.vote
+    .findUnique({ where: { id: parent.id } })
+    .user()
+}
+
+module.exports = {
+  link,
+  user,
+}
+```
+
+Adjust the server code to include this new resolver and remove unnecessary utility code
+
+```diff
+diff --git a/server/src/index.js b/server/src/index.js
+index 02255e5..8996e41 100644
+--- a/server/src/index.js
++++ b/server/src/index.js
+@@ -1,12 +1,14 @@
+ const fs = require("fs")
+ const path = require("path")
+-const jwt = require("jsonwebtoken")
+
+ const { ApolloServer, PubSub } = require("apollo-server")
+ const { PrismaClient } = require("@prisma/client")
+
+ const Mutation = require('./resolvers/Mutation')
+ const Subscription = require('./resolvers/Subscription')
++const Vote = require('./resolvers/Vote')
++
++const { getUserId } = require('./utils')
+
+ const resolvers = {
+   Query: {
+@@ -22,29 +24,12 @@ const resolvers = {
+     description: (parent) => parent.description,
+     url: (parent) => parent.url,
+   },
++  Vote,
+ }
+
+ const prisma = new PrismaClient()
+ const pubsub = new PubSub()
+
+-const APP_SECRET = "GraphQL-is-aw3some"
+-
+-const getUserId = (req) => {
+-  if (req) {
+-    const authHeader = req.headers.authorization
+-    if (authHeader) {
+-      const token = authHeader.replace("Bearer ", "")
+-      if (!token) {
+-        throw new Error("No token found")
+-      }
+-      const { userId } = jwt.verify(token, APP_SECRET)
+-      return userId
+-    }
+-  }
+-
+-  throw new Error("Not authenticated")
+-}
+-
+ const server = new ApolloServer({
+   typeDefs: fs.readFileSync(path.join(__dirname, "schema.graphql"), "utf-8"),
+   resolvers,
+```
+
+Finally, adjust mutations and subscriptions
+
+```diff
+diff --git a/server/src/resolvers/Mutation.js b/server/src/resolvers/Mutation.js
+index 10fb12e..723b1b9 100644
+--- a/server/src/resolvers/Mutation.js
++++ b/server/src/resolvers/Mutation.js
+@@ -43,8 +43,35 @@ async function login(parent, args, context, info) {
+   return { token, user }
+ }
+
++async function vote(parent, args, context, info) {
++  const { userId } = context
++  const vote = await context.prisma.vote.findUnique({
++    where: {
++      linkId_userId: {
++        linkId: Number(args.linkId),
++        userId: userId
++      }
++    }
++  })
++
++  if (Boolean(vote)) {
++    throw new Error(`Already voted for link: ${args.linkId}`)
++  }
++
++  const newVote = context.prisma.vote.create({
++    data: {
++      user: { connect: { id: userId } },
++      link: { connect: { id: Number(args.linkId) } },
++    }
++  })
++  context.pubsub.publish("NEW_VOTE", newVote)
++
++  return newVote
++}
++
+ module.exports = {
+   post,
+   signup,
+   login,
++  vote,
+ }
+```
+
+```diff
+diff --git a/server/src/resolvers/Subscription.js b/server/src/resolvers/Subscription.js
+index 7150405..a95a612 100644
+--- a/server/src/resolvers/Subscription.js
++++ b/server/src/resolvers/Subscription.js
+@@ -9,6 +9,18 @@ const newLink = {
+   },
+ }
+
++function newVoteSubscribe(parent, args, context, info) {
++  return context.pubsub.asyncIterator("NEW_VOTE")
++}
++
++const newVote = {
++  subscribe: newVoteSubscribe,
++  resolve: payload => {
++    return payload
++  },
++}
++
+ module.exports = {
+   newLink,
++  newVote,
+ }
+```
