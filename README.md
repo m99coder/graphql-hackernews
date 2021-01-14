@@ -256,3 +256,87 @@ npx prisma studio
 # If you used another Prisma version before, be sure to delete the IndexedDB in the browser before.
 # `window.indexedDB.deleteDatabase('Prisma Studio')`
 ```
+
+### Connect server and database
+
+Instantiate the prisma client and inject it into the context
+
+```diff
+diff --git a/server/src/index.js b/server/src/index.js
+index 577ccd8..bc31e08 100644
+--- a/server/src/index.js
++++ b/server/src/index.js
+@@ -2,6 +2,7 @@ const fs = require("fs")
+ const path = require("path")
+
+ const { ApolloServer } = require("apollo-server")
++const { PrismaClient } = require("@prisma/client")
+
+ let links = [{
+   id: "link-0",
+@@ -33,9 +34,14 @@ const resolvers = {
+   },
+ }
+
++const prisma = new PrismaClient()
++
+ const server = new ApolloServer({
+   typeDefs: fs.readFileSync(path.join(__dirname, "schema.graphql"), "utf-8"),
+   resolvers,
++  context: {
++    prisma,
++  },
+ })
+
+ server
+```
+
+Utilize the prisma client
+
+```diff
+diff --git a/server/src/index.js b/server/src/index.js
+index bc31e08..f3125bf 100644
+--- a/server/src/index.js
++++ b/server/src/index.js
+@@ -4,27 +4,22 @@ const path = require("path")
+ const { ApolloServer } = require("apollo-server")
+ const { PrismaClient } = require("@prisma/client")
+
+-let links = [{
+-  id: "link-0",
+-  url: "https://howtographql.com",
+-  description: "Fullstack tutorial for GraphQL"
+-}]
+-let idCount = links.length
+-
+ const resolvers = {
+   Query: {
+     info: () => `This is the API of a Hackernews Clone`,
+-    feed: () => links,
++    feed: async (parent, args, context) => {
++      return context.prisma.link.findMany()
++    },
+   },
+   Mutation: {
+-    post: (parent, args) => {
+-      const link = {
+-        id: `link-${idCount++}`,
+-        description: args.description,
+-        url: args.url,
+-      }
+-      links.push(link)
+-      return link
++    post: (parent, args, context, info) => {
++      const newLink = context.prisma.link.create({
++        data: {
++          url: args.url,
++          description: args.description,
++        },
++      })
++      return newLink
+     },
+   },
+   Link: {
+```
+
+You can try it in the GraphQL Playground and all added links remain even after a server restart.
