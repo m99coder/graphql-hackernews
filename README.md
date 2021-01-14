@@ -192,3 +192,67 @@ You should retrieve this result
   }
 }
 ```
+
+### Adding a database
+
+Install Prisma CLI and init data source
+
+```bash
+npm i @prisma/cli@2.12 --save-dev
+npx prisma init
+```
+
+Modify `./prisma/schema.prisma`
+
+```diff
+diff --git a/server/prisma/schema.prisma b/server/prisma/schema.prisma
+index e99af20..5fe76d6 100644
+--- a/server/prisma/schema.prisma
++++ b/server/prisma/schema.prisma
+@@ -1,11 +1,15 @@
+-// This is your Prisma schema file,
+-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+-
+ datasource db {
+-  provider = "postgresql"
+-  url      = env("DATABASE_URL")
++  provider = "sqlite"
++  url      = "file:./dev.db"
+ }
+
+ generator client {
+   provider = "prisma-client-js"
+ }
++
++model Link {
++  id          Int      @id @default(autoincrement())
++  createdAt   DateTime @default(now())
++  description String
++  url         String
++}
+```
+
+Init and run migrations
+
+```bash
+npx prisma migrate save --experimental
+# You will get a prompt asking if you would like to create a new database.
+# Select `Yes`, and type `init` for the Name of migration.
+# The hit `Return` to confirm.
+
+npx prisma migrate up --experimental
+```
+
+Generate the Prisma Client based on the data model
+
+```bash
+npx prisma generate
+```
+
+Using Prisma Studio
+
+```bash
+npx prisma studio
+# If you used another Prisma version before, be sure to delete the IndexedDB in the browser before.
+# `window.indexedDB.deleteDatabase('Prisma Studio')`
+```
