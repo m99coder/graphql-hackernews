@@ -1062,6 +1062,7 @@ index 8996e41..33d81eb 100644
  const Mutation = require('./resolvers/Mutation')
 +const Query = require('./resolvers/Query')
  const Subscription = require('./resolvers/Subscription')
++const User = require('./resolvers/User')
  const Vote = require('./resolvers/Vote')
 
  const { getUserId } = require('./utils')
@@ -1083,5 +1084,6 @@ index 8996e41..33d81eb 100644
 -  },
 +  Link,
    Vote,
++  User,
  }
 ```
