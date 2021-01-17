@@ -29,6 +29,7 @@ This tutorial is a step-by-step guide and each step can be checked out individua
     - [Authentication](#authentication-1)
     - [Creating links](#creating-links)
     - [Routing](#routing)
+    - [More mutations and Updating the store](#more-mutations-and-updating-the-store)
 
 ## Server
 
@@ -2051,3 +2052,271 @@ index c3ae43f..b9ef8a8 100644
 ```
 
 The main route doesn’t update yet – this will come later
+
+### More mutations and Updating the store
+
+First we enhance the GraphQL query to also contain the author and the votes of a link
+
+```diff
+diff --git a/client/src/components/LinkList.js b/client/src/components/LinkList.js
+index 21923fc..8bae72c 100644
+--- a/client/src/components/LinkList.js
++++ b/client/src/components/LinkList.js
+@@ -10,6 +10,16 @@ const FEED_QUERY = gql`
+         createdAt
+         url
+         description
++        postedBy {
++          id
++          name
++        }
++        votes {
++          id
++          user {
++            id
++          }
++        }
+       }
+     }
+   }
+@@ -22,8 +32,8 @@ const LinkList = () => {
+     <div>
+       {data && (
+         <React.Fragment>
+-          {data.feed.links.map((link) => (
+-            <Link key={link.id} link={link} />
++          {data.feed.links.map((link, index) => (
++            <Link key={link.id} link={link} index={index} />
+           ))}
+         </React.Fragment>
+       )}
+```
+
+Then we display the new information in the `Link` component
+
+```diff
+diff --git a/client/src/components/Link.js b/client/src/components/Link.js
+index 4c96063..1d6a3ab 100644
+--- a/client/src/components/Link.js
++++ b/client/src/components/Link.js
+@@ -1,11 +1,30 @@
+ import React from 'react'
++import { AUTH_TOKEN } from '../constants'
++import { timeDifferenceForDate } from '../utils'
+
+ const Link = (props) => {
+   const { link } = props
++  const authToken = localStorage.getItem(AUTH_TOKEN)
++
+   return (
+-    <div>
+-      <div>
+-        {link.description} ({link.url})
++    <div className="flex mt2 items-start">
++      <div className="flex items-center">
++        <span className="gray">{props.index + 1}.</span>
++        {authToken && (
++          <div className="ml1 gray f11" style={{ cursor: 'pointer' }}>▲</div>
++        )}
++      </div>
++      <div className="ml1">
++        <div>
++          {link.description} ({link.url})
++        </div>
++        {authToken && (
++          <div className="f6 lh-copy gray">
++            {link.votes.length} votes | by{' '}
++            {link.postedBy ? link.postedBy.name : 'Unknown'}{' '}
++            {timeDifferenceForDate(link.createdAt)}
++          </div>
++        )}
+       </div>
+     </div>
+   )
+```
+
+The function `timeDifferenceForDate` is implemented inside `./src/utils.js`. Now we call the actual mutation to vote.
+
+```diff
+diff --git a/client/src/components/Link.js b/client/src/components/Link.js
+index 1d6a3ab..9ee9356 100644
+--- a/client/src/components/Link.js
++++ b/client/src/components/Link.js
+@@ -1,17 +1,44 @@
+ import React from 'react'
+ import { AUTH_TOKEN } from '../constants'
+ import { timeDifferenceForDate } from '../utils'
++import { useMutation, gql } from '@apollo/client'
++
++const VOTE_MUTATION = gql`
++  mutation VoteMutation($linkId: ID!) {
++    vote(linkId: $linkId) {
++      id
++      link {
++        id
++        votes {
++          id
++          user {
++            id
++          }
++        }
++      }
++      user {
++        id
++      }
++    }
++  }
++`
+
+ const Link = (props) => {
+   const { link } = props
+   const authToken = localStorage.getItem(AUTH_TOKEN)
+
++  const [vote] = useMutation(VOTE_MUTATION, {
++    variables: {
++      linkId: link.id
++    },
++  })
++
+   return (
+     <div className="flex mt2 items-start">
+       <div className="flex items-center">
+         <span className="gray">{props.index + 1}.</span>
+         {authToken && (
+-          <div className="ml1 gray f11" style={{ cursor: 'pointer' }}>▲</div>
++          <div className="ml1 gray f11" style={{ cursor: 'pointer' }} onClick={vote}>▲</div>
+         )}
+       </div>
+       <div className="ml1">
+```
+
+To update the UI after each mutation we first add another constant
+
+```diff
+diff --git a/client/src/constants.js b/client/src/constants.js
+index 3f1172c..637b960 100644
+--- a/client/src/constants.js
++++ b/client/src/constants.js
+@@ -1 +1,2 @@
+ export const AUTH_TOKEN = 'auth-token'
++export const LINKS_PER_PAGE = 20
+```
+
+Also export `FEED_QUERY` in the `LinkList` component so that it can be re-used in `Link` and `CreateLink`
+
+```diff --git a/client/src/components/LinkList.js b/client/src/components/LinkList.js
+index 8bae72c..d68e07b 100644
+--- a/client/src/components/LinkList.js
++++ b/client/src/components/LinkList.js
+@@ -2,7 +2,7 @@ import React from 'react'
+ import Link from './Link'
+ import { useQuery, gql } from '@apollo/client'
+
+-const FEED_QUERY = gql`
++export const FEED_QUERY = gql`
+   {
+     feed {
+       links {
+(
+```
+
+Utilize the `update` method of `useMutation` in the `Link` component
+
+```diff
+diff --git a/client/src/components/Link.js b/client/src/components/Link.js
+index 9ee9356..6e5b4c3 100644
+--- a/client/src/components/Link.js
++++ b/client/src/components/Link.js
+@@ -2,6 +2,7 @@ import React from 'react'
+ import { AUTH_TOKEN } from '../constants'
+ import { timeDifferenceForDate } from '../utils'
+ import { useMutation, gql } from '@apollo/client'
++import { FEED_QUERY } from './LinkList'
+
+ const VOTE_MUTATION = gql`
+   mutation VoteMutation($linkId: ID!) {
+@@ -31,6 +32,30 @@ const Link = (props) => {
+     variables: {
+       linkId: link.id
+     },
++    update(cache, { data: { vote } }) {
++      const { feed } = cache.readQuery({
++        query: FEED_QUERY
++      })
++
++      const updatedLinks = feed.links.map((feedLink) => {
++        if (feedLink.id === link.id) {
++          return {
++            ...feedLink,
++            votes: [vote, ...feedLink.votes]
++          }
++        }
++        return feedLink
++      })
++
++      cache.writeQuery({
++        query: FEED_QUERY,
++        data: {
++          feed: {
++            links: updatedLinks,
++          },
++        },
++      })
++    }
+   })
+
+   return (
+```
+
+Finally do the same in the `CreateLink` component
+
+```diff
+diff --git a/client/src/components/CreateLink.js b/client/src/components/CreateLink.js
+index 332a976..034d0a5 100644
+--- a/client/src/components/CreateLink.js
++++ b/client/src/components/CreateLink.js
+@@ -1,6 +1,8 @@
+ import React, { useState } from 'react'
+ import { useMutation, gql } from '@apollo/client'
+ import { useHistory } from 'react-router'
++import { LINKS_PER_PAGE } from './../constants'
++import { FEED_QUERY } from './LinkList'
+
+ const CREATE_LINK_MUTATION = gql`
+   mutation PostMutation(
+@@ -30,6 +32,34 @@ const CreateLink = () => {
+       url: formState.url,
+     },
+     onCompleted: () => history.push('/'),
++    update: (cache, { data: { post } }) => {
++      const take = LINKS_PER_PAGE
++      const skip = 0
++      const orderBy = { createdAt: 'desc' }
++
++      const data = cache.readQuery({
++        query: FEED_QUERY,
++        variables: {
++          take,
++          skip,
++          orderBy,
++        },
++      })
++
++      cache.writeQuery({
++        query: FEED_QUERY,
++        data: {
++          feed: {
++            link: [post, ...data.feed.links]
++          }
++        },
++        variables: {
++          take,
++          skip,
++          orderBy,
++        }
++      })
++    },
+   })
+
+   return (
+```
