@@ -27,6 +27,7 @@ This tutorial is a step-by-step guide and each step can be checked out individua
     - [Getting started](#getting-started-1)
     - [Loading links](#loading-links)
     - [Authentication](#authentication-1)
+    - [Creating links](#creating-links)
 
 ## Server
 
@@ -1788,3 +1789,92 @@ index 3ded303..fdb5290 100644
    cache: new InMemoryCache(),
  })
 ```
+
+### Creating links
+
+First create the new `./src/components/CreateLink.js` component
+
+```js
+import React, { useState } from 'react'
+import { useMutation, gql } from '@apollo/client'
+
+const CREATE_LINK_MUTATION = gql`
+  mutation PostMutation(
+    $description: String!
+    $url: String!
+  ) {
+    post(description: $description, url: $url) {
+      id
+      createdAt
+      url
+      description
+    }
+  }
+`
+
+const CreateLink = () => {
+  const [formState, setFormState] = useState({
+    description: '',
+    url: '',
+  })
+
+  const [createLink] = useMutation(CREATE_LINK_MUTATION, {
+    variables: {
+      description: formState.description,
+      url: formState.url,
+    },
+  })
+
+  return (
+    <div>
+      <form onSubmit={(e) => {
+        e.preventDefault()
+        createLink()
+      }}>
+        <div className="flex flex-column mt3">
+          <input className="mb2" value={formState.description} onChange={(e) => {
+            setFormState({
+              ...formState,
+              description: e.target.value,
+            })
+          }} type="text" placeholder="A description for the link" />
+          <input className="mb2" value={formState.url} onChange={(e) => {
+            setFormState({
+              ...formState,
+              url: e.target.value,
+            })
+          }} type="text" placeholder="The URL for the link" />
+        </div>
+        <button type="submit">Submit</button>
+      </form>
+    </div>
+  )
+}
+
+export default CreateLink
+```
+
+Second, include it into the `App` component
+
+```diff
+diff --git a/client/src/components/App.js b/client/src/components/App.js
+index 4ce8dd6..facd262 100644
+--- a/client/src/components/App.js
++++ b/client/src/components/App.js
+@@ -1,4 +1,5 @@
+ import React, { Component } from 'react'
++import CreateLink from './CreateLink'
+ import LinkList from './LinkList'
+ import Login from './Login'
+
+@@ -7,6 +8,7 @@ class App extends Component {
+     return (
+       <React.Fragment>
+         <Login />
++        <CreateLink />
+         <LinkList />
+       </React.Fragment>
+     )
+```
+
+Don’t wonder… Currently there is no user feedback. But you can always check the state of the database by running `npx prisma studio`.
