@@ -30,6 +30,7 @@ This tutorial is a step-by-step guide and each step can be checked out individua
     - [Creating links](#creating-links)
     - [Routing](#routing)
     - [More mutations and Updating the store](#more-mutations-and-updating-the-store)
+    - [Searching a link](#searching-a-link)
 
 ## Server
 
@@ -2319,4 +2320,106 @@ index 332a976..034d0a5 100644
    })
 
    return (
+```
+
+### Searching a link
+
+First add the `./src/components/Search.js` component
+
+```js
+import React, { useState } from 'react'
+import { gql, useLazyQuery } from '@apollo/client'
+import Link from './Link'
+
+const FEED_SEARCH_QUERY = gql`
+  query FeedSearchQuery($filter: String!) {
+    feed(filter: $filter) {
+      links {
+        id
+        url
+        description
+        createdAt
+        postedBy {
+          id
+          name
+        }
+        votes {
+          id
+          user {
+            id
+          }
+        }
+      }
+    }
+  }
+`
+
+const Search = () => {
+  const [searchFilter, setSearchFilter] = useState('')
+  const [executeSearch, { data }] = useLazyQuery(FEED_SEARCH_QUERY)
+
+  return (
+    <React.Fragment>
+      <div>
+        Search
+        <input type="text" onChange={(e) => setSearchFilter(e.target.value)} />
+        <button onClick={() => {
+          executeSearch({
+            variables: {
+              filter: searchFilter,
+            },
+          })
+        }}>OK</button>
+      </div>
+      {data && data.feed.links.map((link, index) => (
+        <Link key={link.id} link={link} index={index} />
+      ))}
+    </React.Fragment>
+  )
+}
+
+export default Search
+```
+
+Now add the `Search` component to the router
+
+```diff
+diff --git a/client/src/components/App.js b/client/src/components/App.js
+index 0d9446d..797df8a 100644
+--- a/client/src/components/App.js
++++ b/client/src/components/App.js
+@@ -4,6 +4,7 @@ import CreateLink from './CreateLink'
+ import Header from './Header'
+ import LinkList from './LinkList'
+ import Login from './Login'
++import Search from './Search'
+
+ class App extends Component {
+   render() {
+@@ -15,6 +16,7 @@ class App extends Component {
+             <Route exact path="/" component={LinkList} />
+             <Route exact path="/create" component={CreateLink} />
+             <Route exact path="/login" component={Login} />
++            <Route exact path="/search" component={Search} />
+           </Switch>
+         </div>
+       </div>
+```
+
+Finally add the component route to the `Header`
+
+```diff
+diff --git a/client/src/components/Header.js b/client/src/components/Header.js
+index b9ef8a8..411b657 100644
+--- a/client/src/components/Header.js
++++ b/client/src/components/Header.js
+@@ -12,6 +12,8 @@ const Header = () => {
+       <div className="flex flex-fixed black">
+         <div className="fw7 mr1">Hacker News</div>
+         <Link to="/" className="ml1 no-underline black">new</Link>
++        <div className="ml1">|</div>
++        <Link to="/search" className="ml1 no-underline black">search</Link>
+         {authToken && (
+           <div className="flex">
+             <div className="ml1">|</div>
 ```
