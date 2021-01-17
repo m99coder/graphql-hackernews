@@ -26,6 +26,7 @@ This tutorial is a step-by-step guide and each step can be checked out individua
   - [Client](#client)
     - [Getting started](#getting-started-1)
     - [Loading links](#loading-links)
+    - [Authentication](#authentication-1)
 
 ## Server
 
@@ -1599,4 +1600,191 @@ index c4f726e..21923fc 100644
      </div>
    )
  }
+```
+
+### Authentication
+
+Before we can mutate data we need to handle authentication
+
+> **Warning**: Storing JWTs in `localStorage` is not a safe approach to implement authentication on the frontend.
+
+Add `./src/constants.js`
+
+```js
+export const AUTH_TOKEN = 'auth-token'
+```
+
+Add the login component as `./src/components/Login.js`
+
+```js
+import React, { useState } from 'react'
+import { gql, useMutation } from '@apollo/client'
+import { AUTH_TOKEN } from '../constants'
+
+const SIGNUP_MUTATION = gql`
+  mutation SignupMutation(
+    $email: String!
+    $password: String!
+    $name: String!
+  ) {
+    signup(
+      email: $email
+      password: $password
+      name: $name
+    ) {
+      token
+    }
+  }
+`
+
+const LOGIN_MUTATION = gql`
+  mutation LoginMutation(
+    $email: String!
+    $password: String!
+  ) {
+    login(
+      email: $email
+      password: $password
+    ) {
+      token
+    }
+  }
+`
+
+const Login = () => {
+  const [formState, setFormState] = useState({
+    login: true,
+    email: '',
+    password: '',
+    name: '',
+  })
+
+  const [login] = useMutation(LOGIN_MUTATION, {
+    variables: {
+      email: formState.email,
+      password: formState.password,
+    },
+    onCompleted: ({ login }) => {
+      localStorage.setItem(AUTH_TOKEN, login.token)
+    },
+  })
+
+  const [signup] = useMutation(SIGNUP_MUTATION, {
+    variables: {
+      name: formState.name,
+      email: formState.email,
+      password: formState.password,
+    },
+    onCompleted: ({ signup }) => {
+      localStorage.setItem(AUTH_TOKEN, login.token)
+    },
+  })
+
+  return (
+    <div>
+      <h4 className="mv3">
+        {formState.login ? 'Login' : 'Sign up'}
+      </h4>
+      <div className="flex flex-column">
+        {!formState.login && (
+          <input value={formState.name} onChange={(e) => {
+            setFormState({
+              ...formState,
+              name: e.target.value,
+            })
+          }} type="text" placeholder="Your name" />
+        )}
+        <input value={formState.email} onChange={(e) => {
+          setFormState({
+            ...formState,
+            email: e.target.value,
+          })
+        }} type="text" placeholder="Your email address" />
+        <input value={formState.password} onChange={(e) => {
+          setFormState({
+            ...formState,
+            password: e.target.value,
+          })
+        }} type="password" placeholder="Choose a safe password" />
+      </div>
+      <div className="flex mt3">
+        <button className="pointer mr2 button" onClick={formState.login ? login : signup}>
+          {formState.login ? 'login' : 'create account'}
+        </button>
+        <button className="pointer button" onClick={(e) => {
+          setFormState({
+            ...formState,
+            login: !formState.login
+          })
+        }}>
+          {formState.login
+            ? 'need to create an account?'
+            : 'already have an account?' }
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export default Login
+```
+
+Include the `Login` component into the `App` component
+
+```diff
+diff --git a/client/src/components/App.js b/client/src/components/App.js
+index e47b648..4ce8dd6 100644
+--- a/client/src/components/App.js
++++ b/client/src/components/App.js
+@@ -1,9 +1,15 @@
+ import React, { Component } from 'react'
+ import LinkList from './LinkList'
++import Login from './Login'
+
+ class App extends Component {
+   render() {
+-    return <LinkList />
++    return (
++      <React.Fragment>
++        <Login />
++        <LinkList />
++      </React.Fragment>
++    )
+   }
+ }
+```
+
+Finally inject the `Authorization` header into the `link` property of the Apollo client
+
+```diff
+diff --git a/client/src/index.js b/client/src/index.js
+index 3ded303..fdb5290 100644
+--- a/client/src/index.js
++++ b/client/src/index.js
+@@ -10,13 +10,25 @@ import {
+   createHttpLink,
+   InMemoryCache
+ } from '@apollo/client'
++import { setContext } from '@apollo/client/link/context'
++import { AUTH_TOKEN } from './constants'
+
+ const httpLink = createHttpLink({
+   uri: 'http://localhost:4000',
+ })
+
++const authLink = setContext((_, { headers }) => {
++  const token = localStorage.getItem(AUTH_TOKEN)
++  return {
++    headers: {
++      ...headers,
++      authorization: token ? `Bearer ${token}`: ''
++    },
++  }
++})
++
+ const client = new ApolloClient({
+-  link: httpLink,
++  link: authLink.concat(httpLink),
+   cache: new InMemoryCache(),
+ })
 ```
