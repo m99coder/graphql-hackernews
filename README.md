@@ -25,6 +25,7 @@ This tutorial is a step-by-step guide and each step can be checked out individua
     - [Counting](#counting)
   - [Client](#client)
     - [Getting started](#getting-started-1)
+    - [Loading links](#loading-links)
 
 ## Server
 
@@ -1475,4 +1476,127 @@ index f2dcf42..3ded303 100644
 +  </ApolloProvider>,
    document.getElementById('root')
  );
+```
+
+### Loading links
+
+Add `./src/components/Link.js` and `./src/components/LinkList.js`
+
+```js
+import React from 'react'
+
+const Link = (props) => {
+  const { link } = props
+  return (
+    <div>
+      <div>
+        {link.description} ({link.url})
+      </div>
+    </div>
+  )
+}
+
+export default Link
+```
+
+```js
+import React from 'react'
+import Link from './Link'
+
+const LinkList = () => {
+  const linksToRender = [
+    {
+      id: '1',
+      description: 'Prisma gives you a powerful database toolkit 😎',
+      url: 'https://prisma.io'
+    },
+    {
+      id: '2',
+      description: 'The best GraphQL client',
+      url: 'https://www.apollographql.com/docs/react/'
+    }
+  ]
+
+  return (
+    <div>
+      {linksToRender.map((link) => (
+        <Link key={link.id} link={link} />
+      ))}
+    </div>
+  )
+}
+
+export default LinkList
+```
+
+And replace the contents of `./src/components/App.js` with
+
+```js
+import React, { Component } from 'react'
+import LinkList from './LinkList'
+
+class App extends Component {
+  render() {
+    return <LinkList />
+  }
+}
+
+export default App
+```
+
+Now we using Apollo client to actually query the backend. Make sure that it runs in a different terminal running `npm start` from within the `/server` directory.
+
+```diff
+diff --git a/client/src/components/LinkList.js b/client/src/components/LinkList.js
+index c4f726e..21923fc 100644
+--- a/client/src/components/LinkList.js
++++ b/client/src/components/LinkList.js
+@@ -1,25 +1,32 @@
+ import React from 'react'
+ import Link from './Link'
++import { useQuery, gql } from '@apollo/client'
+
+-const LinkList = () => {
+-  const linksToRender = [
+-    {
+-      id: '1',
+-      description: 'Prisma gives you a powerful database toolkit 😎',
+-      url: 'https://prisma.io'
+-    },
+-    {
+-      id: '2',
+-      description: 'The best GraphQL client',
+-      url: 'https://www.apollographql.com/docs/react/'
++const FEED_QUERY = gql`
++  {
++    feed {
++      links {
++        id
++        createdAt
++        url
++        description
++      }
+     }
+-  ]
++  }
++`
++
++const LinkList = () => {
++  const { data } = useQuery(FEED_QUERY)
+
+   return (
+     <div>
+-      {linksToRender.map((link) => (
+-        <Link key={link.id} link={link} />
+-      ))}
++      {data && (
++        <React.Fragment>
++          {data.feed.links.map((link) => (
++            <Link key={link.id} link={link} />
++          ))}
++        </React.Fragment>
++      )}
+     </div>
+   )
+ }
 ```
