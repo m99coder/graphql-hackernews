@@ -1947,7 +1947,7 @@ index facd262..f5b599c 100644
  }
 ```
 
-Finally we implement a redirect to the main route after creating a link
+Now we implement a redirect to the main route after creating a link
 
 ```diff
 diff --git a/client/src/components/CreateLink.js b/client/src/components/CreateLink.js
@@ -1978,6 +1978,76 @@ index 0a80ce2..332a976 100644
    })
 
    return (
+```
+
+Next we add the login route to the `App` component
+
+```diff
+diff --git a/client/src/components/App.js b/client/src/components/App.js
+index f5b599c..0d9446d 100644
+--- a/client/src/components/App.js
++++ b/client/src/components/App.js
+@@ -3,6 +3,7 @@ import { Route, Switch } from 'react-router'
+ import CreateLink from './CreateLink'
+ import Header from './Header'
+ import LinkList from './LinkList'
++import Login from './Login'
+
+ class App extends Component {
+   render() {
+@@ -13,6 +14,7 @@ class App extends Component {
+           <Switch>
+             <Route exact path="/" component={LinkList} />
+             <Route exact path="/create" component={CreateLink} />
++            <Route exact path="/login" component={Login} />
+           </Switch>
+         </div>
+       </div>
+```
+
+Finally we adjust the `Header` component to reflect the authorization state
+
+```diff
+diff --git a/client/src/components/Header.js b/client/src/components/Header.js
+index c3ae43f..b9ef8a8 100644
+--- a/client/src/components/Header.js
++++ b/client/src/components/Header.js
+@@ -1,14 +1,33 @@
+ import React from 'react'
++import { useHistory } from 'react-router'
+ import { Link } from 'react-router-dom'
++import { AUTH_TOKEN } from '../constants'
+
+ const Header = () => {
++  const history = useHistory()
++  const authToken = localStorage.getItem(AUTH_TOKEN)
++
+   return (
+     <div className="flex pa1 justify-between nowrap orange">
+       <div className="flex flex-fixed black">
+         <div className="fw7 mr1">Hacker News</div>
+         <Link to="/" className="ml1 no-underline black">new</Link>
+-        <div className="ml1">|</div>
+-        <Link to="/create" className="ml1 no-underline black">submit</Link>
++        {authToken && (
++          <div className="flex">
++            <div className="ml1">|</div>
++            <Link to="/create" className="ml1 no-underline black">submit</Link>
++          </div>
++        )}
++      </div>
++      <div className="flex flex-fixed">
++        {authToken ? (
++          <div className="ml1 pointer black" onClick={() => {
++            localStorage.removeItem(AUTH_TOKEN)
++            history.push(`/`)
++          }}>logout</div>
++        ) : (
++          <Link to="/login" className="ml1 no-underline black">login</Link>
++        )}
+       </div>
+     </div>
+   )
 ```
 
 The main route doesn’t update yet – this will come later
