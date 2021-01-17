@@ -23,6 +23,8 @@ This tutorial is a step-by-step guide and each step can be checked out individua
     - [Pagination](#pagination)
     - [Sorting](#sorting)
     - [Counting](#counting)
+  - [Client](#client)
+    - [Getting started](#getting-started-1)
 
 ## Server
 
@@ -1353,4 +1355,124 @@ query {
     }
   }
 }
+```
+
+## Client
+
+Change into the root directory `/client`.
+
+### Getting started
+
+First we create the app
+
+```bash
+create-react-app client
+cd client
+yarn start
+```
+
+After that we prepare the styling
+
+```diff
+diff --git a/client/public/index.html b/client/public/index.html
+index aa069f2..67b1127 100644
+--- a/client/public/index.html
++++ b/client/public/index.html
+@@ -3,6 +3,7 @@
+   <head>
+     <meta charset="utf-8" />
+     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
++    <link rel="stylesheet" href="https://unpkg.com/tachyons@4.12.0/css/tachyons.min.css" />
+     <meta name="viewport" content="width=device-width, initial-scale=1" />
+     <meta name="theme-color" content="#000000" />
+     <meta
+```
+
+Replace the contents of `./src/styles/index.css` as follows
+
+```css
+body {
+  margin: 0;
+  padding: 0;
+  font-family: Verdana, Geneva, sans-serif;
+}
+
+input {
+  max-width: 500px;
+}
+
+.gray {
+  color: #828282;
+}
+
+.orange {
+  background-color: #ff6600;
+}
+
+.background-gray {
+  background-color: rgb(246, 246, 239);
+}
+
+.f11 {
+  font-size: 11px;
+}
+
+.w85 {
+  width: 85%;
+}
+
+.button {
+  font-family: monospace;
+  font-size: 10pt;
+  color: black;
+  background-color: buttonface;
+  text-align: center;
+  padding: 2px 6px 3px;
+  border-width: 2px;
+  border-style: outset;
+  border-color: buttonface;
+  cursor: pointer;
+  max-width: 250px;
+}
+```
+
+Now we install and configure the Apollo client
+
+```bash
+yarn add @apollo/client graphql
+```
+
+```diff
+diff --git a/client/src/index.js b/client/src/index.js
+index f2dcf42..3ded303 100644
+--- a/client/src/index.js
++++ b/client/src/index.js
+@@ -4,10 +4,26 @@ import './styles/index.css';
+ import App from './components/App';
+ import reportWebVitals from './reportWebVitals';
+
++import {
++  ApolloProvider,
++  ApolloClient,
++  createHttpLink,
++  InMemoryCache
++} from '@apollo/client'
++
++const httpLink = createHttpLink({
++  uri: 'http://localhost:4000',
++})
++
++const client = new ApolloClient({
++  link: httpLink,
++  cache: new InMemoryCache(),
++})
++
+ ReactDOM.render(
+-  <React.StrictMode>
++  <ApolloProvider client={client}>
+     <App />
+-  </React.StrictMode>,
++  </ApolloProvider>,
+   document.getElementById('root')
+ );
 ```
