@@ -28,6 +28,7 @@ This tutorial is a step-by-step guide and each step can be checked out individua
     - [Loading links](#loading-links)
     - [Authentication](#authentication-1)
     - [Creating links](#creating-links)
+    - [Routing](#routing)
 
 ## Server
 
@@ -1878,3 +1879,105 @@ index 4ce8dd6..facd262 100644
 ```
 
 Don’t wonder… Currently there is no user feedback. But you can always check the state of the database by running `npx prisma studio`.
+
+### Routing
+
+Add React Router to implement a navigation
+
+```bash
+yarn add react-router react-router-dom
+```
+
+Create a `./src/components/Header.js` component
+
+```js
+import React from 'react'
+import { Link } from 'react-router-dom'
+
+const Header = () => {
+  return (
+    <div className="flex pa1 justify-between nowrap orange">
+      <div className="flex flex-fixed black">
+        <div className="fw7 mr1">Hacker News</div>
+        <Link to="/" className="ml1 no-underline black">new</Link>
+        <div className="ml1">|</div>
+        <Link to="/create" className="ml1 no-underline black">submit</Link>
+      </div>
+    </div>
+  )
+}
+
+export default Header
+```
+
+Next we add the router to the `App` component
+
+```diff
+diff --git a/client/src/components/App.js b/client/src/components/App.js
+index facd262..f5b599c 100644
+--- a/client/src/components/App.js
++++ b/client/src/components/App.js
+@@ -1,16 +1,21 @@
+ import React, { Component } from 'react'
++import { Route, Switch } from 'react-router'
+ import CreateLink from './CreateLink'
++import Header from './Header'
+ import LinkList from './LinkList'
+-import Login from './Login'
+
+ class App extends Component {
+   render() {
+     return (
+-      <React.Fragment>
+-        <Login />
+-        <CreateLink />
+-        <LinkList />
+-      </React.Fragment>
++      <div className="center w85">
++        <Header />
++        <div className="ph3 pv1 background-gray">
++          <Switch>
++            <Route exact path="/" component={LinkList} />
++            <Route exact path="/create" component={CreateLink} />
++          </Switch>
++        </div>
++      </div>
+     )
+   }
+ }
+```
+
+Finally we implement a redirect to the main route after creating a link
+
+```diff
+diff --git a/client/src/components/CreateLink.js b/client/src/components/CreateLink.js
+index 0a80ce2..332a976 100644
+--- a/client/src/components/CreateLink.js
++++ b/client/src/components/CreateLink.js
+@@ -1,5 +1,6 @@
+ import React, { useState } from 'react'
+ import { useMutation, gql } from '@apollo/client'
++import { useHistory } from 'react-router'
+
+ const CREATE_LINK_MUTATION = gql`
+   mutation PostMutation(
+@@ -16,6 +17,8 @@ const CREATE_LINK_MUTATION = gql`
+ `
+
+ const CreateLink = () => {
++  const history = useHistory()
++
+   const [formState, setFormState] = useState({
+     description: '',
+     url: '',
+@@ -26,6 +29,7 @@ const CreateLink = () => {
+       description: formState.description,
+       url: formState.url,
+     },
++    onCompleted: () => history.push('/'),
+   })
+
+   return (
+```
+
+The main route doesn’t update yet – this will come later
