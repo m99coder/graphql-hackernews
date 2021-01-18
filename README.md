@@ -2,6 +2,11 @@
 
 > How to GraphQL – Hackernews Clone
 
+Based on these two [How to GraphQL](https://www.howtographql.com/) tutorials:
+
+* [graphql-node Tutorial](https://www.howtographql.com/graphql-js/0-introduction/) by Robin MacPherson
+* [React + Apollo Tutorial](https://www.howtographql.com/react-apollo/0-introduction/) by Nikolas Burk
+
 ## Introduction
 
 This tutorial is a step-by-step guide and each step can be checked out individually. To get a full list of available tags run `git tag`. To checkout a specific tag run `git checkout tags/<tag>`.
@@ -32,6 +37,7 @@ This tutorial is a step-by-step guide and each step can be checked out individua
     - [More mutations and Updating the store](#more-mutations-and-updating-the-store)
     - [Searching a link](#searching-a-link)
     - [Realtime updates with GraphQL subscriptions](#realtime-updates-with-graphql-subscriptions)
+    - [Pagination](#pagination-1)
 
 ## Server
 
@@ -2656,3 +2662,233 @@ mutation VoteForApollo {
   }
 }
 ```
+
+### Pagination
+
+First we modify our route structure
+
+```diff
+diff --git a/client/src/components/App.js b/client/src/components/App.js
+index 797df8a..4cacad8 100644
+--- a/client/src/components/App.js
++++ b/client/src/components/App.js
+@@ -1,5 +1,5 @@
+ import React, { Component } from 'react'
+-import { Route, Switch } from 'react-router'
++import { Redirect, Route, Switch } from 'react-router'
+ import CreateLink from './CreateLink'
+ import Header from './Header'
+ import LinkList from './LinkList'
+@@ -13,10 +13,12 @@ class App extends Component {
+         <Header />
+         <div className="ph3 pv1 background-gray">
+           <Switch>
+-            <Route exact path="/" component={LinkList} />
++            <Route exact path="/" render={() => <Redirect to="/new/1" />} />
+             <Route exact path="/create" component={CreateLink} />
+             <Route exact path="/login" component={Login} />
+             <Route exact path="/search" component={Search} />
++            <Route exact path="/top" component={LinkList} />
++            <Route exact path="/new/:page" component={LinkList} />
+           </Switch>
+         </div>
+       </div>
+```
+
+Then we modify the navigation in the `Header` component
+
+```diff
+diff --git a/client/src/components/Header.js b/client/src/components/Header.js
+index 411b657..0f3cf7b 100644
+--- a/client/src/components/Header.js
++++ b/client/src/components/Header.js
+@@ -13,6 +13,8 @@ const Header = () => {
+         <div className="fw7 mr1">Hacker News</div>
+         <Link to="/" className="ml1 no-underline black">new</Link>
+         <div className="ml1">|</div>
++        <Link to="/top" className="ml1 no-underline black">top</Link>
++        <div className="ml1">|</div>
+         <Link to="/search" className="ml1 no-underline black">search</Link>
+         {authToken && (
+           <div className="flex">
+```
+
+And we incorporate the pagination into the `LinkList` component
+
+```diff
+diff --git a/client/src/components/LinkList.js b/client/src/components/LinkList.js
+index 59bfd21..887c01c 100644
+--- a/client/src/components/LinkList.js
++++ b/client/src/components/LinkList.js
+@@ -5,8 +5,12 @@ import { LINKS_PER_PAGE } from '../constants'
+ import { useHistory } from 'react-router'
+
+ export const FEED_QUERY = gql`
+-  {
+-    feed {
++  query FeedQuery(
++    $take: Int
++    $skip: Int
++    $orderBy: LinkOrderByInput
++  ) {
++    feed(take: $take, skip: $skip, orderBy: $orderBy) {
+       links {
+         id
+         createdAt
+@@ -23,6 +27,7 @@ export const FEED_QUERY = gql`
+           }
+         }
+       }
++      count
+     }
+   }
+ `
+@@ -87,6 +92,7 @@ const LinkList = () => {
+   const isNewPage = history.location.pathname.includes('new')
+   const pageIndexParams = history.location.pathname.split('/')
+   const page = parseInt(pageIndexParams[pageIndexParams.length - 1])
++  const pageIndex = page ? (page - 1) * LINKS_PER_PAGE : 0
+
+   const {
+     data,
+@@ -118,13 +124,41 @@ const LinkList = () => {
+     document: NEW_VOTES_SUBSCRIPTION,
+   })
+
++  const getLinksToRender = (isNewPage, data) => {
++    if (isNewPage) {
++      return data.feed.links
++    }
++    const rankedLinks = data.feed.links.slice()
++    rankedLinks.sort(
++      (l1, l2) => l2.votes.length - l1.votes.length
++    )
++    return rankedLinks
++  }
++
+   return (
+     <div>
++      {loading && <p>Loading ...</p>}
++      {error && <pre>{JSON.stringify(error, null, 2)}</pre>}
+       {data && (
+         <React.Fragment>
+-          {data.feed.links.map((link, index) => (
+-            <Link key={link.id} link={link} index={index} />
++          {getLinksToRender(isNewPage, data).map((link, index) => (
++            <Link key={link.id} link={link} index={index + pageIndex} />
+           ))}
++          {isNewPage && (
++            <div className="flex ml4 mv3 gray">
++              <div className="pointer mr2" onClick={() => {
++                if (page > 1) {
++                  history.push(`/new/${page - 1}`)
++                }
++              }}>Previous</div>
++              <div className="pointer" onClick={() => {
++                if (page <= data.feed.count / LINKS_PER_PAGE) {
++                  const nextPage = page + 1
++                  history.push(`/new/${nextPage}`)
++                }
++              }}>Next</div>
++            </div>
++          )}
+         </React.Fragment>
+       )}
+     </div>
+```
+
+Finally we need to enhance the vote mutation to also carry the pagination variables
+
+```diff
+diff --git a/client/src/components/Link.js b/client/src/components/Link.js
+index 6e5b4c3..43b5c1e 100644
+--- a/client/src/components/Link.js
++++ b/client/src/components/Link.js
+@@ -1,5 +1,5 @@
+ import React from 'react'
+-import { AUTH_TOKEN } from '../constants'
++import { AUTH_TOKEN, LINKS_PER_PAGE } from '../constants'
+ import { timeDifferenceForDate } from '../utils'
+ import { useMutation, gql } from '@apollo/client'
+ import { FEED_QUERY } from './LinkList'
+@@ -28,13 +28,22 @@ const Link = (props) => {
+   const { link } = props
+   const authToken = localStorage.getItem(AUTH_TOKEN)
+
++  const take = LINKS_PER_PAGE
++  const skip = 0
++  const orderBy = { createdAt: 'desc' }
++
+   const [vote] = useMutation(VOTE_MUTATION, {
+     variables: {
+       linkId: link.id
+     },
+     update(cache, { data: { vote } }) {
+       const { feed } = cache.readQuery({
+-        query: FEED_QUERY
++        query: FEED_QUERY,
++        variables: {
++          take,
++          skip,
++          orderBy,
++        },
+       })
+
+       const updatedLinks = feed.links.map((feedLink) => {
+@@ -54,6 +63,11 @@ const Link = (props) => {
+             links: updatedLinks,
+           },
+         },
++        variables: {
++          take,
++          skip,
++          orderBy,
++        },
+       })
+     }
+   })
+```
+
+In order to only show valid pagination links we add more adjustments
+
+```diff
+diff --git a/client/src/components/LinkList.js b/client/src/components/LinkList.js
+index 887c01c..dac7a15 100644
+--- a/client/src/components/LinkList.js
++++ b/client/src/components/LinkList.js
+@@ -146,17 +146,21 @@ const LinkList = () => {
+           ))}
+           {isNewPage && (
+             <div className="flex ml4 mv3 gray">
+-              <div className="pointer mr2" onClick={() => {
+-                if (page > 1) {
+-                  history.push(`/new/${page - 1}`)
+-                }
+-              }}>Previous</div>
+-              <div className="pointer" onClick={() => {
+-                if (page <= data.feed.count / LINKS_PER_PAGE) {
+-                  const nextPage = page + 1
+-                  history.push(`/new/${nextPage}`)
+-                }
+-              }}>Next</div>
++              {page > 1 && (
++                <div className="pointer mr2" onClick={() => {
++                  if (page > 1) {
++                    history.push(`/new/${page - 1}`)
++                  }
++                }}>Previous</div>
++              )}
++              {page < Math.floor(data.feed.count / LINKS_PER_PAGE) && (
++                <div className="pointer" onClick={() => {
++                  if (page <= Math.floor(data.feed.count / LINKS_PER_PAGE)) {
++                    const nextPage = page + 1
++                    history.push(`/new/${nextPage}`)
++                  }
++                }}>Next</div>
++              )}
+             </div>
+           )}
+         </React.Fragment>
+```
+
+That’s it 😎 Quite a ride, but worth it. Thanks for reading, coding and trying out this tutorial.
