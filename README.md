@@ -31,6 +31,7 @@ This tutorial is a step-by-step guide and each step can be checked out individua
     - [Routing](#routing)
     - [More mutations and Updating the store](#more-mutations-and-updating-the-store)
     - [Searching a link](#searching-a-link)
+    - [Realtime updates with GraphQL subscriptions](#realtime-updates-with-graphql-subscriptions)
 
 ## Server
 
@@ -2422,4 +2423,236 @@ index b9ef8a8..411b657 100644
          {authToken && (
            <div className="flex">
              <div className="ml1">|</div>
+```
+
+### Realtime updates with GraphQL subscriptions
+
+First install websocket support packages
+
+```bash
+npm install subscriptions-transport-ws
+```
+
+Now add the `WebSocketLink` configuration, which is using a `split` to distinguish between WebSocket and HTTP based traffic
+
+```diff
+diff --git a/client/src/index.js b/client/src/index.js
+index 5db84bc..9482477 100644
+--- a/client/src/index.js
++++ b/client/src/index.js
+@@ -8,9 +8,13 @@ import {
+   ApolloProvider,
+   ApolloClient,
+   createHttpLink,
+-  InMemoryCache
++  InMemoryCache,
++  split
+ } from '@apollo/client'
+ import { setContext } from '@apollo/client/link/context'
++import { WebSocketLink } from '@apollo/client/link/ws'
++import { getMainDefinition } from '@apollo/client/utilities'
++
+ import { AUTH_TOKEN } from './constants'
+ import { BrowserRouter } from 'react-router-dom';
+
+@@ -28,8 +32,29 @@ const authLink = setContext((_, { headers }) => {
+   }
+ })
+
++const wsLink = new WebSocketLink({
++  uri: `ws://localhost:4000/graphql`,
++  options: {
++    reconnect: true,
++    connectionParams: {
++      authToken: localStorage.getItem(AUTH_TOKEN)
++    },
++  },
++})
++
++const link = split(
++  ({ query }) => {
++    const { kind, operation } = getMainDefinition(query)
++    return (
++      kind === 'OperationDefinition' && operation === 'subscription'
++    )
++  },
++  wsLink,
++  authLink.concat(httpLink)
++)
++
+ const client = new ApolloClient({
+-  link: authLink.concat(httpLink),
++  link,
+   cache: new InMemoryCache(),
+ })
+```
+
+Then we subscribe ourselves to the creation of new links inside of the `LinkList` component
+
+```diff
+diff --git a/client/src/components/LinkList.js b/client/src/components/LinkList.js
+index d68e07b..578ed97 100644
+--- a/client/src/components/LinkList.js
++++ b/client/src/components/LinkList.js
+@@ -1,6 +1,8 @@
+ import React from 'react'
+ import Link from './Link'
+ import { useQuery, gql } from '@apollo/client'
++import { LINKS_PER_PAGE } from '../constants'
++import { useHistory } from 'react-router'
+
+ export const FEED_QUERY = gql`
+   {
+@@ -25,8 +27,65 @@ export const FEED_QUERY = gql`
+   }
+ `
+
++const NEW_LINKS_SUBSCRIPTION = gql`
++  subscription {
++    newLink {
++      id
++      url
++      description
++      createdAt
++      postedBy {
++        id
++        name
++      }
++      votes {
++        id
++        user {
++          id
++        }
++      }
++    }
++  }
++`
++
++const getQueryVariables = (isNewPage, page) => {
++  const skip = isNewPage ? (page - 1) * LINKS_PER_PAGE : 0
++  const take = isNewPage ? LINKS_PER_PAGE : 100
++  const orderBy = { createdAt: 'desc' }
++  return { take, skip, orderBy }
++}
++
+ const LinkList = () => {
+-  const { data } = useQuery(FEED_QUERY)
++  const history = useHistory()
++  const isNewPage = history.location.pathname.includes('new')
++  const pageIndexParams = history.location.pathname.split('/')
++  const page = parseInt(pageIndexParams[pageIndexParams.length - 1])
++
++  const {
++    data,
++    loading,
++    error,
++    subscribeToMore
++  } = useQuery(FEED_QUERY, {
++    variables: getQueryVariables(isNewPage, page)
++  })
++
++  subscribeToMore({
++    document: NEW_LINKS_SUBSCRIPTION,
++    updateQuery: (prev, { subscriptionData }) => {
++      if (!subscriptionData.data) return prev
++      const newLink = subscriptionData.data.newLink
++      const exists = prev.feed.links.find(({ id }) => id === newLink.id)
++      if (exists) return prev
++      return Object.assign({}, prev, {
++        feed: {
++          links: [newLink, ...prev.feed.links],
++          count: prev.feed.links.length + 1,
++          __typename: prev.feed.__typename
++        }
++      })
++    }
++  })
+
+   return (
+     <div>
+```
+
+Run a `newLink` mutation to see live changes of the link list
+
+```graphql
+mutation NewLink {
+  post(description: "My personal portfolio", url: "https://m99.io") {
+    id
+    url
+    description
+  }
+}
+```
+
+We do the same to subscribe to new votes
+
+```diff
+diff --git a/client/src/components/LinkList.js b/client/src/components/LinkList.js
+index 578ed97..59bfd21 100644
+--- a/client/src/components/LinkList.js
++++ b/client/src/components/LinkList.js
+@@ -48,6 +48,33 @@ const NEW_LINKS_SUBSCRIPTION = gql`
+   }
+ `
+
++const NEW_VOTES_SUBSCRIPTION = gql`
++  subscription {
++    newVote {
++      id
++      link {
++        id
++        url
++        description
++        createdAt
++        postedBy {
++          id
++          name
++        }
++        votes {
++          id
++          user {
++            id
++          }
++        }
++      }
++      user {
++        id
++      }
++    }
++  }
++`
++
+ const getQueryVariables = (isNewPage, page) => {
+   const skip = isNewPage ? (page - 1) * LINKS_PER_PAGE : 0
+   const take = isNewPage ? LINKS_PER_PAGE : 100
+@@ -84,7 +111,11 @@ const LinkList = () => {
+           __typename: prev.feed.__typename
+         }
+       })
+-    }
++    },
++  })
++
++  subscribeToMore({
++    document: NEW_VOTES_SUBSCRIPTION,
+   })
+
+   return (
+```
+
+Run a `vote` mutation to see live changes of the link list
+
+```graphql
+mutation VoteForApollo {
+  vote(linkId: "2") {
+    link {
+      url
+      description
+    }
+    user {
+      name
+      email
+    }
+  }
+}
 ```
